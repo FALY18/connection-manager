@@ -5,6 +5,9 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Providers\VoucherService;
 use App\Models\Voucher;
+use Illuminate\Support\Facades\Redis;
+use Illuminate\Support\Str;
+use Carbon\Carbon;
 
 class VoucherController extends Controller
 {
@@ -39,31 +42,127 @@ class VoucherController extends Controller
     /**
      * Activer un voucher
      */
-
     public function activate(Request $request)
     {
         $request->validate([
             'code' => 'required|string',
-            'mac' => 'nullable|string',
-            'ip' => 'nullable|ip',
+            'device_mac' => 'required|string',
+            'ip_address' => 'required|ip',
         ]);
 
-        $session = $this->voucherService->activateVoucher(
-            $request->code,
-            $request->mac,
-            $request->ip
-        );
+        // Chercher le voucher
+        $voucher = Voucher::where('code', $request->code)
+            ->where('status', 'unused')
+            ->first();
 
-        if (!$session) {
-            return response()->json(['error' => 'Invalid or expired voucher'], 422);
+        if (!$voucher) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Voucher invalide ou déjà utilisé'
+            ], 404);
+        }
+
+        // Vérifier le plan associé
+        $plan = $voucher->plan;
+        
+        if (!$plan) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Plan associé non trouvé'
+            ], 404);
+        }
+
+        // Vérifier la durée du plan
+        if (!$plan->duration_minutes || $plan->duration_minutes <= 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Durée du plan invalide'
+            ], 400);
+        }
+
+        // Générer la session
+        $sessionId = (string) Str::uuid();
+        $expiresAt = now()->addMinutes($plan->duration_minutes);
+        $ttl = now()->diffInSeconds($expiresAt);
+
+        // Vérifier que le TTL est valide pour Redis
+        if ($ttl <= 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'La durée du voucher a expiré'
+            ], 400);
+        }
+
+        // S'assurer que le TTL est un entier
+        $ttl = (int) $ttl;
+
+        // Préparer les données de session
+        $payload = [
+            'id' => $sessionId,
+            'voucher_code' => $voucher->code,
+            'plan' => [
+                'id' => $plan->id,
+                'name' => $plan->name,
+                'duration_minutes' => $plan->duration_minutes,
+            ],
+            'ip' => $request->ip_address,
+            'mac' => $request->device_mac,
+            'started_at' => now()->toDateTimeString(),
+            'expires_at' => $expiresAt->toDateTimeString(),
+            'status' => 'active',
+        ];
+
+        try {
+            // Stocker en Redis avec SETEX
+            Redis::setex("session:{$sessionId}", $ttl, json_encode($payload));
+            
+        } catch (\Exception $e) {
+            \Log::error('Redis SETEX error', [
+                'error' => $e->getMessage(),
+                'ttl' => $ttl,
+                'session_id' => $sessionId,
+                'plan_duration' => $plan->duration_minutes
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de l\'activation de la session',
+                'error' => env('APP_DEBUG') ? $e->getMessage() : null
+            ], 500);
+        }
+
+        // Mettre à jour le voucher
+        try {
+            $voucher->update([
+                'status' => 'used',
+                'used_at' => now(),
+                'activated_by_mac' => $request->device_mac,
+                'activated_ip' => $request->ip_address,
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Voucher update error', [
+                'error' => $e->getMessage(),
+                'voucher_id' => $voucher->id,
+            ]);
+            
+            // Optionnel: Supprimer la session Redis si l'update échoue
+            Redis::del("session:{$sessionId}");
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la mise à jour du voucher'
+            ], 500);
         }
 
         return response()->json([
-            'message' => 'Access granted',
-            'session' => $session
-        ]);
+            'success' => true,
+            'message' => 'Voucher activé avec succès',
+            'session' => $payload,
+            'session_id' => $sessionId,
+            'ttl' => $ttl,
+            'expires_in_minutes' => $plan->duration_minutes,
+        ], 201);
     }
-
 
     public function index(Request $request)
     {
@@ -83,6 +182,4 @@ class VoucherController extends Controller
 
         return response()->json($vouchers);
     }
-
-
 }

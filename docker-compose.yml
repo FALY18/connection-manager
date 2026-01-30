@@ -1,4 +1,3 @@
-version: "3.9"
 
 services:
   postgres:
@@ -12,12 +11,24 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U laravel_user -d gestion_connect"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
-    image: redis:7-alpine
+    build: ./redis-config
     container_name: gestion_connect_redis
     ports:
       - "6380:6379"
+    volumes:
+      - redisdata:/data
+    networks:
+      - app-network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -30,9 +41,82 @@ services:
     ports:
       - "1812:1812/udp"
       - "1813:1813/udp"
+      - "18120:18120/udp"
+      - "18130:18130/udp"
     volumes:
       - ./radius-config:/etc/freeradius
+    networks:
+      - app-network
+    depends_on:
+      - redis
+      - postgres
+    restart: unless-stopped
+    command: freeradius -f -l stdout
+
+  laravel:
+    build:
+      context: .
+      dockerfile: Dockerfile.laravel
+    container_name: gestion_connect_laravel
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/var/www/html
+      - ./storage:/var/www/html/storage
+    networks:
+      - app-network
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      - DB_CONNECTION=pgsql
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_DATABASE=gestion_connect
+      - DB_USERNAME=laravel_user
+      - DB_PASSWORD=secret
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PREFIX=laravel-database-
+      - RADIUS_API_KEY=supersecretkey
+      - APP_URL=http://localhost:8000
+    command: >
+      sh -c "
+      php artisan migrate --force &&
+      php artisan db:seed --force &&
+      php artisan serve --host=0.0.0.0 --port=8000"
+
+  redis-listener:
+    build:
+      context: .
+      dockerfile: Dockerfile.laravel
+    container_name: gestion_connect_redis_listener
+    volumes:
+      - .:/var/www/html
+    networks:
+      - app-network
+    depends_on:
+      - laravel
+      - redis
+    environment:
+      - DB_CONNECTION=pgsql
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_DATABASE=gestion_connect
+      - DB_USERNAME=laravel_user
+      - DB_PASSWORD=secret
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PREFIX=laravel-database-
+    command: php artisan redis:listen-expired
     restart: unless-stopped
 
 volumes:
   pgdata:
+  redisdata:
+
+networks:
+  app-network:
+    driver: bridge

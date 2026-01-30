@@ -35,8 +35,14 @@ return [
         ],
     ],
 
+    // 'radius' => [
+    //     'key' => env('RADIUS_API_KEY'),
+    // ],
     'radius' => [
-        'key' => env('RADIUS_API_KEY'),
+        'api_key' => env('RADIUS_API_KEY', 'supersecretkey'),
+        'coa_secret' => env('RADIUS_COA_SECRET', 'testing123'),
+        'coa_port' => env('RADIUS_COA_PORT', 3799),
+        'coa_host' => env('RADIUS_COA_HOST', '127.0.0.1'),
     ],
 
 

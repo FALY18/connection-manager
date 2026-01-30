@@ -1,0 +1,14 @@
+# Exclure les dossiers problématiques
+radius-config.bak/
+*.bak
+backup/
+node_modules/
+vendor/
+.env
+.git/
+.idea/
+*.log
+*.sqlite
+*.sqlite-journal
+.DS_Store
+Thumbs.db

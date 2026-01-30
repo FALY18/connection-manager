@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\Auth\VoucherController;
 use App\Http\Controllers\Client\SessionController;
 use App\Http\Controllers\Admin\Auth\RealtimeController;
 use App\Http\Controllers\Admin\PlanController;
+use App\Http\Controllers\Radius\RadiusController;
 
 
 /*
@@ -74,3 +75,13 @@ Route::middleware('auth:sanctum')
         Route::patch('/plans/{plan}/toggle', [PlanController::class, 'toggle']);
     });
 
+
+    Route::delete('/admin/sessions/{id}', [SessionController::class, 'destroy']);
+
+
+Route::prefix('radius')->group(function() {
+    Route::post('auth', [RadiusController::class, 'authenticate']);
+    Route::post('accounting/start', [RadiusController::class, 'startSession']);
+    Route::post('accounting/stop', [RadiusController::class, 'stopSession']);
+    Route::post('accounting/interim', [RadiusController::class, 'interimSession']);
+});

@@ -1,0 +1,2 @@
+- [x] Update handle() method in RedisExpiryListener.php with reconnection loop
+- [x] Test the changes with redis-test.sh and simulate connection drops

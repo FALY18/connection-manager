@@ -25,7 +25,7 @@ class SessionController extends Controller
     public function list()
     {
         $sessions = Session::orderByDesc('started_at')->limit(100)->get();
-        return response()->json($sessions);
+        //return response()->json($sessions);
     }
 
     public function disconnect(string $id)

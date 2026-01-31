@@ -1,6 +1,5 @@
 # Exclure les dossiers problématiques
-radius-config.bak/
-*.bak
+
 backup/
 node_modules/
 vendor/

@@ -1,13 +1,49 @@
-# Exclure les dossiers problématiques
-
-backup/
-node_modules/
+# Gros dossiers à exclure ABSOLUMENT
 vendor/
-.env
+node_modules/
+storage/
+bootstrap/cache/
 .git/
+
+# Fichiers d'environnement
+.env
+.env.local
+.env.*.local
+.env.example
+
+# IDE et éditeurs
+.vscode/
 .idea/
+.editorconfig
+*.swp
+*.swo
+
+# Logs et fichiers temporaires
 *.log
+npm-debug.log
+yarn-error.log
 *.sqlite
 *.sqlite-journal
+
+# Fichiers de configuration et documentation
+docker-compose.yml
+Dockerfile*
+.dockerignore
+.gitignore
+.gitattributes
+README.md
+TODO.md
+phpunit.xml
+
+# Dossiers de test et CI/CD
+tests/
+.github/
+.gitlab/
+.gitlab-ci.yml
+
+# Autres
 .DS_Store
 Thumbs.db
+.docker/
+backup/
+radius-config.bak.tmp/

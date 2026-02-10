@@ -11,63 +11,25 @@ server default {
         port = 1813
     }
     
-    listen {
-        type = auth
-        ipaddr = 127.0.0.1
-        port = 18120
-    }
-    
-    listen {
-        type = acct
-        ipaddr = 127.0.0.1
-        port = 18130
-    }
-    
     authorize {
         preprocess
-        rest
-        
-        if (ok) {
-            update control {
-                &Session-Timeout := '${reply.session_timeout}'
-                &Idle-Timeout := '${reply.idle_timeout}'
-            }
-        }
-        
-        if (!ok) {
-            reject
-        }
+        files
     }
     
     authenticate {
-        Auth-Type REST {
-            rest
-        }
+        pap
     }
     
     accounting {
         detail
-        rest
-        
-        if (ok) {
-            update request {
-                &Tmp-String-0 := "%{reply.session_id}"
-            }
-        }
     }
     
     session {
     }
     
     post-auth {
-        if (session-state == 'Start') {
-            update reply {
-                &Acct-Interim-Interval = 300
-            }
-        }
-        post-auth
-        Post-Auth-Type REJECT {
-            post-auth
+        update reply {
+            &Acct-Interim-Interval = 300
         }
     }
     

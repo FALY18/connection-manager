@@ -121,3 +121,201 @@ echo "   Shell Laravel:    docker compose exec laravel bash"
 echo ""
 echo "🧪 Pour tester:"
 echo "   docker compose exec laravel php artisan redis:listen-expired --test"
+
+
+_-______-___-_____-________---__-___---______-___---_---_-_____----_-
+
+MInimiser l'installation : on a trop de chose à installer sur ce projet comme indique ceci:rust@user-macbookpro8120250207:~/opr/entrain/essai/gestion_connect/backend$ docker compose up -d
+[+] Building 169.5s (6/18)                                                                                
+ => [internal] load local bake definitions                                                           0.0s
+ => => reading from stdin 1.55kB                                                                     0.0s
+ => [laravel internal] load build definition from Dockerfile.laravel                                 0.0s
+ => => transferring dockerfile: 1.21kB                                                               0.0s
+ => [laravel internal] load metadata for docker.io/library/php:8.2-fpm-alpine                        2.8s
+ => [laravel internal] load .dockerignore                                                            0.0s
+ => => transferring context: 181B                                                                    0.0s
+ => CACHED [redis-listener  1/13] FROM docker.io/library/php:8.2-fpm-alpine@sha256:6363baa3186e5bd4  0.0s
+ => => resolve docker.io/library/php:8.2-fpm-alpine@sha256:6363baa3186e5bd43794c9612f8a34fb88657179  0.0s
+ => [redis-listener internal] load build context                                                     1.4s
+ => => transferring context: 45.82MB                                                                 1.3s
+ => [redis-listener  2/13] RUN apk add --no-cache     postgresql-dev     postgresql-client     li  166.3s
+ => => # ( 87/116) Installing libpq-dev (18.1-r0)                                                        
+ => => # ( 88/116) Installing libecpg (18.1-r0)                                                          
+ => => # ( 89/116) Installing libecpg-dev (18.1-r0)                                                      
+ => => # ( 90/116) Installing clang20-headers (20.1.8-r1)                                                
+ => => # ( 91/116) Installing llvm20-libs (20.1.8-r0)                                                    
+ => => # ( 92/116) Installing clang20-libs (20.1.8-r1)       . 
+ Et donc vérifier cela car j'ai déja utiliser quelques une de ces dépendences dans de projets qui tourne sur ce docker aussi. verifier le package déja installer et vérifier ce qui ne son pas installer le réinstaller cela. VOICI dockerfile.laravel:FROM php:8.2-fpm-alpine
+
+# Install system dependencies
+RUN apk add --no-cache \
+    postgresql-dev \
+    postgresql-client \
+    libpng-dev \
+    libzip-dev \
+    zip \
+    unzip \
+    curl \
+    git \
+    supervisor \
+    redis \
+    nodejs \
+    npm \
+    openssl \
+    certbot \
+    linux-headers
+
+# Install PHP extensions
+RUN docker-php-ext-install pdo pdo_pgsql pgsql gd zip bcmath sockets
+
+# Install Redis extension
+RUN pecl install redis && docker-php-ext-enable redis
+
+# Install Composer
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+
+# Install Node.js and NPM for frontend assets
+RUN apk add --no-cache nodejs npm
+
+# Install Supervisor for process management
+RUN mkdir -p /var/log/supervisor
+
+WORKDIR /var/www/html
+
+# Copy application files
+COPY . .
+
+# Install PHP dependencies
+RUN composer install --no-dev --optimize-autoloader --no-interaction
+
+# Set permissions
+RUN chown -R www-data:www-data storage bootstrap/cache
+RUN chmod -R 775 storage bootstrap/cache
+
+# Generate application key
+RUN php artisan key:generate
+
+EXPOSE 8000
+
+CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]  et docker compose.yml:
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gestion_connect_postgres
+    environment:
+      POSTGRES_DB: gestion_connect
+      POSTGRES_USER: laravel_user
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U laravel_user -d gestion_connect"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    build: ./redis-config
+    container_name: gestion_connect_redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - redisdata:/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  freeradius:
+    image: freeradius/freeradius-server:latest
+    container_name: gestion_connect_radius
+    ports:
+      - "1812:1812/udp"
+      - "1813:1813/udp"
+      - "18120:18120/udp"
+      - "18130:18130/udp"
+    volumes:
+      - ./radius-config:/etc/freeradius
+    networks:
+      - app-network
+    depends_on:
+      - redis
+      - postgres
+    restart: unless-stopped
+    command: freeradius -f -l stdout
+
+  laravel:
+    build:
+      context: .
+      dockerfile: Dockerfile.laravel
+    container_name: gestion_connect_laravel
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/var/www/html
+      - ./storage:/var/www/html/storage
+    networks:
+      - app-network
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      - DB_CONNECTION=pgsql
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_DATABASE=gestion_connect
+      - DB_USERNAME=laravel_user
+      - DB_PASSWORD=secret
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PREFIX=laravel-database-
+      - RADIUS_API_KEY=supersecretkey
+      - APP_URL=http://localhost:8000
+    command: >
+      sh -c "
+      php artisan migrate --force &&
+      php artisan db:seed --force &&
+      php artisan serve --host=0.0.0.0 --port=8000"
+
+  redis-listener:
+    build:
+      context: .
+      dockerfile: Dockerfile.laravel
+    container_name: gestion_connect_redis_listener
+    volumes:
+      - .:/var/www/html
+    networks:
+      - app-network
+    depends_on:
+      - laravel
+      - redis
+    environment:
+      - DB_CONNECTION=pgsql
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_DATABASE=gestion_connect
+      - DB_USERNAME=laravel_user
+      - DB_PASSWORD=secret
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PREFIX=laravel-database-
+    command: php artisan redis:listen-expired
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
+
+networks:
+  app-network:
+    driver: bridge

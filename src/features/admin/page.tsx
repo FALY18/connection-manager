@@ -9,7 +9,7 @@ import { Wifi, Users, Download, Smartphone, LogOut } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import PricingPlans from "@/features/plans/components/pricing-plans"
-import VoucherManager from "@/components/voucher-manager"
+import VoucherManager from "../vouchers/components/VoucherManager"
 
 export default function AdminDashboard() {
 	const isAuthorized = useAdminAuth()
@@ -43,7 +43,7 @@ export default function AdminDashboard() {
 
 			<main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 				<Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-					<TabsList className="grid w-full max-w-2xl grid-cols-3 mb-8 bg-slate-900/50 border border-slate-700/50">
+					<TabsList className="grid w-full max-w-2xl grid-cols-3 mb-8 bg-green-600">
 						<TabsTrigger value="connections" className="text-white">Connexions Actives</TabsTrigger>
 						<TabsTrigger value="vouchers" className="text-white">Gestion Vouchers</TabsTrigger>
 						<TabsTrigger value="pricing" className="text-white">Tarifs</TabsTrigger>

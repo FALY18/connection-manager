@@ -1,32 +1,16 @@
 import { base_url } from "@/constants/urls"
+import getAuthHeaders from "@/lib/getAuthHeader"
 import type {
 	ApiPlan,
 	Plan,
 	CreatePlanPayload,
 	UpdatePlanPayload,
 } from "../types/plan"
+
 import { mapApiPlanToPlan } from "../lib/plan-mapper"
 
 const isDev = process.env.NODE_ENV === "development"
 
-// Helper function to get auth headers
-const getAuthHeaders = () => {
-	const headers: Record<string, string> = { Accept: "application/json" }
-	
-	try {
-		const session = localStorage.getItem("adminSession")
-		if (session) {
-			const { token } = JSON.parse(session)
-			if (token) {
-				headers["Authorization"] = `Bearer ${token}`
-			}
-		}
-	} catch (err) {
-		console.error("Error parsing admin session:", err)
-	}
-	
-	return headers
-}
 
 // ---------- GET ----------
 export const fetchPlansAction = async (): Promise<Plan[]> => {

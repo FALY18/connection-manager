@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Radius;
+namespace App\Http\Controllers\Raduis;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
@@ -20,7 +20,8 @@ class RadiusController extends Controller
 		]);
 
 		// Vérifier voucher ou user
-		$voucher = \App\Models\Voucher::where('code', $request->password)
+		$voucher = \App\Models\Voucher::with('plan')
+			->where('code', $request->password)
 			->where('status', 'unused')
 			->first();
 
@@ -44,7 +45,11 @@ class RadiusController extends Controller
 			'voucher_code' => 'required|string'
 		]);
 
-		$voucher = \App\Models\Voucher::where('code', $request->voucher_code)->first();
+		$voucher = \App\Models\Voucher::with('plan')->where('code', $request->voucher_code)->first();
+
+		if (!$voucher || !$voucher->plan) {
+			return response()->json(['success' => false, 'message' => 'Voucher invalide'], 404);
+		}
 
 		$sessionId = (string) Str::uuid();
 		$durationSeconds = $voucher->plan->duration_minutes * 60;
@@ -52,13 +57,12 @@ class RadiusController extends Controller
 
 		$session = Session::create([
 			'id' => $sessionId,
-			'voucher_code' => $voucher->code,
-			'plan_id' => $voucher->plan_id,
-			'ip' => $request->ip,
-			'mac' => $request->mac,
+			'voucher_id' => $voucher->id,
+			'username' => $request->username,
+			'ip_address' => $request->ip,
+			'mac_address' => $request->mac,
 			'status' => 'active',
 			'started_at' => now(),
-			'expires_at' => $expiresAt,
 		]);
 
 		// Redis
@@ -67,7 +71,8 @@ class RadiusController extends Controller
 			'voucher_code' => $voucher->code,
 			'ip' => $request->ip,
 			'mac' => $request->mac,
-			'status' => 'active'
+			'status' => 'active',
+			'expires_at' => $expiresAt->toIso8601String()
 		]));
 
 		return response()->json(['success' => true, 'session_id' => $sessionId]);

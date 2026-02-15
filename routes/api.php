@@ -7,7 +7,7 @@ use App\Http\Controllers\Admin\Auth\VoucherController;
 use App\Http\Controllers\Client\SessionController;
 use App\Http\Controllers\Admin\Auth\RealtimeController;
 use App\Http\Controllers\Admin\PlanController;
-use App\Http\Controllers\Radius\RadiusController;
+use App\Http\Controllers\Raduis\RadiusController;
 
 
 /*

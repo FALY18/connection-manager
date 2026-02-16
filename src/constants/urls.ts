@@ -1,1 +1,1 @@
-export const base_url = process.env.PUBLIC_API_BACKEND || "http://localhost:8000"
+export const base_url = process.env.PUBLIC_API_BACKEND || "http://localhost:8000/api"

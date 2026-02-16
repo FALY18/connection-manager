@@ -9,14 +9,22 @@ import type { ActivateVoucherResponse } from "../types/voucher"
  *  - aucune dépendance UI
  *  - uniquement I/O réseau
  */
-export const activateVoucher = async (code: string): Promise<ActivateVoucherResponse> => {
+export const activateVoucher = async (
+	code: string,
+	deviceMac?: string,
+	ipAddress?: string
+): Promise<ActivateVoucherResponse> => {
 	if (!code) {
 		throw new Error("Voucher code is required")
 	}
 
-	const payload = { code }
+	const payload = {
+		code,
+		device_mac: deviceMac || "00:00:00:00:00:00",
+		ip_address: ipAddress || "0.0.0.0",
+	}
 
-	return fetcher<ActivateVoucherResponse>(`${base_url}/activate`, {
+	return fetcher<ActivateVoucherResponse>(`${base_url}/vouchers/activate`, {
 		method: "POST",
 		headers: {
 			"Content-Type": "application/json",

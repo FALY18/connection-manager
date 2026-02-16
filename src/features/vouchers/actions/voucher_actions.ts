@@ -8,29 +8,29 @@ import getAuthHeaders from "@/lib/getAuthHeader"
 /* ---------------------------- */
 
 const json = async <T>(response: Response): Promise<T> => {
-  const data = await response.json().catch(() => null)
+	const data = await response.json().catch(() => null)
 
-  if (!response.ok) {
-    console.error("API ERROR:", {
-      url: response.url,
-      status: response.status,
-      data,
-    })
-    throw new Error(data?.message ?? "Erreur API")
-  }
+	if (!response.ok) {
+		console.error("API ERROR:", {
+			url: response.url,
+			status: response.status,
+			data,
+		})
+		throw new Error(data?.message ?? "Erreur API")
+	}
 
-  return data as T
+	return data as T
 }
 
 const apiFetch = (url: string, options: RequestInit = {}) => {
-  return fetch(url, {
-    ...options,
-    credentials: "include",
-    headers: {
-      ...getAuthHeaders(),
-      ...(options.headers ?? {}),
-    },
-  })
+	return fetch(url, {
+		...options,
+		credentials: "include",
+		headers: {
+			...getAuthHeaders(),
+			...(options.headers ?? {}),
+		},
+	})
 }
 
 /* ---------------------------- */
@@ -38,48 +38,48 @@ const apiFetch = (url: string, options: RequestInit = {}) => {
 /* ---------------------------- */
 
 export const voucherApi = {
-  /* -------- Plans -------- */
+	/* -------- Plans -------- */
 
-  getPlans: (): Promise<Plan[]> =>
-    apiFetch(`${base_url}/admin/plans`, {
-      method: "GET",
-    }).then((r) => json<Plan[]>(r)),
+	getPlans: (): Promise<Plan[]> =>
+		apiFetch(`${base_url}/admin/plans`, {
+			method: "GET",
+		}).then((r) => json<Plan[]>(r)),
 
-  /* -------- Vouchers -------- */
+	/* -------- Vouchers -------- */
 
-  getVouchers: (): Promise<VoucherApi[]> =>
-    apiFetch(`${base_url}/vouchers`, {
-      method: "GET",
-    }).then((r) => json<VoucherApi[]>(r)),
+	getVouchers: (): Promise<VoucherApi[]> =>
+		apiFetch(`${base_url}/vouchers`, {
+			method: "GET",
+		}).then((r) => json<VoucherApi[]>(r)),
 
-  generate: (plan_id: string, quantity: number) =>
-    apiFetch(`${base_url}/vouchers/generate`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ plan_id, quantity }),
-    }).then((r) => json<{ success: boolean; data: VoucherApi[] }>(r)),
+	generate: (plan_id: string, quantity: number) =>
+		apiFetch(`${base_url}/vouchers/generate`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({ plan_id, quantity }),
+		}).then((r) => json<{ success: boolean; data: VoucherApi[] }>(r)),
 
-  activate: (code: string) =>
-    apiFetch(`${base_url}/vouchers/activate`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ code }),
-    }).then(
-      (r) =>
-        json<{
-          message: string
-          session: {
-            id: string
-            session_id: string
-            voucher_code: string
-            plan_id: string
-            expires_at: string
-            duration_minutes: number
-          }
-        }>(r),
-    ),
+	activate: (code: string) =>
+		apiFetch(`${base_url}/vouchers/activate`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({ code }),
+		}).then(
+			(r) =>
+				json<{
+					message: string
+					session: {
+						id: string
+						session_id: string
+						voucher_code: string
+						plan_id: string
+						expires_at: string
+						duration_minutes: number
+					}
+				}>(r),
+		),
 }

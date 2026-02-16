@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { activateVoucher } from "../actions/voucher.actions"
 import { VOUCHER_MESSAGES } from "../constants/messages"
+import { getClientIP, getDeviceFingerprint } from "../utils/device-info"
 import type { VoucherSession } from "../types/voucher"
 
 type Status = "idle" | "loading" | "success" | "error"
@@ -25,7 +26,10 @@ export const useVoucherActivation = () => {
 		setMessage("")
 
 		try {
-			const response = await activateVoucher(code)
+			const deviceMac = getDeviceFingerprint()
+			const ipAddress = await getClientIP()
+
+			const response = await activateVoucher(code, deviceMac, ipAddress)
 
 			setSession(response.session)
 			setStatus("success")

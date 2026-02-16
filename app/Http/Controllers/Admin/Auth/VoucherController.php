@@ -52,13 +52,13 @@ class VoucherController extends Controller
 
         // Chercher le voucher
         $voucher = Voucher::with('plan')->where('code', $request->code)
-            ->where('status', 'unused')
+            ->whereIn('status', ['unused', 'used'])
             ->first();
 
         if (!$voucher) {
             return response()->json([
                 'success' => false,
-                'message' => 'Voucher invalide ou déjà utilisé'
+                'message' => 'Voucher invalide'
             ], 404);
         }
 
@@ -70,6 +70,35 @@ class VoucherController extends Controller
                 'success' => false,
                 'message' => 'Plan associé non trouvé'
             ], 404);
+        }
+
+        // Si voucher déjà utilisé, vérifier la limite d'appareils
+        if ($voucher->status === 'used') {
+            // Vérifier si cet appareil a déjà une session
+            $existingSession = \App\Models\Session::where('voucher_id', $voucher->id)
+                ->where('mac_address', $request->device_mac)
+                ->where('status', 'active')
+                ->first();
+
+            if ($existingSession) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Session déjà active pour cet appareil',
+                    'session_id' => $existingSession->id,
+                ], 200);
+            }
+
+            // Compter les sessions actives
+            $activeSessions = \App\Models\Session::where('voucher_id', $voucher->id)
+                ->where('status', 'active')
+                ->count();
+
+            if ($activeSessions >= $plan->max_devices) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Limite d\'appareils atteinte (' . $plan->max_devices . ' max)'
+                ], 403);
+            }
         }
 
         // Vérifier la durée du plan
@@ -144,26 +173,28 @@ class VoucherController extends Controller
             \Log::error('Session DB creation error', ['error' => $e->getMessage()]);
         }
 
-        // Mettre à jour le voucher
-        try {
-            $voucher->update([
-                'status' => 'used',
-                'used_at' => now(),
-                'activated_by_mac' => $request->device_mac,
-                'activated_ip' => $request->ip_address,
-            ]);
-        } catch (\Exception $e) {
-            \Log::error('Voucher update error', [
-                'error' => $e->getMessage(),
-                'voucher_id' => $voucher->id,
-            ]);
-            
-            Redis::del("session:{$sessionId}");
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Erreur lors de la mise à jour du voucher'
-            ], 500);
+        // Mettre à jour le voucher (seulement si unused)
+        if ($voucher->status === 'unused') {
+            try {
+                $voucher->update([
+                    'status' => 'used',
+                    'used_at' => now(),
+                    'activated_by_mac' => $request->device_mac,
+                    'activated_ip' => $request->ip_address,
+                ]);
+            } catch (\Exception $e) {
+                \Log::error('Voucher update error', [
+                    'error' => $e->getMessage(),
+                    'voucher_id' => $voucher->id,
+                ]);
+                
+                Redis::del("session:{$sessionId}");
+                
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Erreur lors de la mise à jour du voucher'
+                ], 500);
+            }
         }
 
         return response()->json([

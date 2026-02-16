@@ -29,21 +29,34 @@ class RadiusController extends Controller
 			return response()->json(['accept' => false], 401);
 		}
 
-		// Si voucher déjà utilisé, vérifier session active dans Redis
+		// Si voucher déjà utilisé, vérifier session active et limite d'appareils
 		if ($voucher->status === 'used') {
-			$sessions = Redis::keys("session:*");
-			$hasActiveSession = false;
+			// Compter les sessions actives pour ce voucher
+			$activeSessions = Session::where('voucher_id', $voucher->id)
+				->where('status', 'active')
+				->count();
 
-			foreach ($sessions as $key) {
-				$sessionData = json_decode(Redis::get($key), true);
-				if ($sessionData && $sessionData['voucher_code'] === $voucher->code) {
-					$hasActiveSession = true;
-					break;
-				}
+			// Vérifier si l'appareil a déjà une session
+			$existingSession = Session::where('voucher_id', $voucher->id)
+				->where('mac_address', $request->mac)
+				->where('status', 'active')
+				->first();
+
+			if ($existingSession) {
+				// Appareil déjà connecté, autoriser
+				return response()->json([
+					'accept' => true,
+					'session_timeout' => $voucher->plan->duration_minutes * 60,
+					'idle_timeout' => 300,
+				]);
 			}
 
-			if (!$hasActiveSession) {
-				return response()->json(['accept' => false, 'message' => 'Voucher expiré'], 401);
+			// Vérifier la limite d'appareils
+			if ($activeSessions >= $voucher->plan->max_devices) {
+				return response()->json([
+					'accept' => false,
+					'message' => 'Limite d\'appareils atteinte'
+				], 401);
 			}
 		}
 
@@ -69,8 +82,9 @@ class RadiusController extends Controller
 			return response()->json(['success' => false, 'message' => 'Voucher invalide'], 404);
 		}
 
-		// Vérifier si session existe déjà pour ce voucher
+		// Vérifier si l'appareil a déjà une session
 		$existingSession = Session::where('voucher_id', $voucher->id)
+			->where('mac_address', $request->mac)
 			->where('status', 'active')
 			->first();
 
@@ -80,6 +94,18 @@ class RadiusController extends Controller
 				'session_id' => $existingSession->id,
 				'message' => 'Session déjà active'
 			]);
+		}
+
+		// Vérifier la limite d'appareils
+		$activeSessions = Session::where('voucher_id', $voucher->id)
+			->where('status', 'active')
+			->count();
+
+		if ($activeSessions >= $voucher->plan->max_devices) {
+			return response()->json([
+				'success' => false,
+				'message' => 'Limite d\'appareils atteinte (' . $voucher->plan->max_devices . ' max)'
+			], 403);
 		}
 
 		$sessionId = (string) Str::uuid();

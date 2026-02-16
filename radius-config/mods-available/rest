@@ -1,47 +1,31 @@
-{
-    "rest": {
-        "enabled": "yes",
-        "base_url": "http://host.docker.internal:8000/api/radius",
-        "timeout": 10,
-        "connect_timeout": 3,
-        "auth": {
-            "method": "post",
-            "uri": "${..base_url}/auth",
-            "body": "json",
-            "tls": "no",
-            "tls_certificate_file": "",
-            "tls_key_file": "",
-            "tls_key_password": "",
-            "tls_ca_file": "",
-            "tls_verify_hostname": "no",
-            "tls_verify_peer": "no",
-            "headers": {
-                "X-API-Key": "supersecretkey",
-                "Content-Type": "application/json"
-            },
-            "data": {
-                "username": "%{User-Name}",
-                "password": "%{User-Password}",
-                "mac": "%{Calling-Station-Id}",
-                "ip": "%{Framed-IP-Address}"
-            }
-        },
-        "accounting": {
-            "method": "post",
-            "uri": "${..base_url}/accounting/${..event}",
-            "body": "json",
-            "tls": "no",
-            "headers": {
-                "X-API-Key": "supersecretkey",
-                "Content-Type": "application/json"
-            },
-            "data": {
-                "username": "%{User-Name}",
-                "session_id": "%{Acct-Session-Id}",
-                "mac": "%{Calling-Station-Id}",
-                "ip": "%{Framed-IP-Address}",
-                "voucher_code": "%{User-Name}"
-            }
-        }
+rest {
+    connect_uri = "http://laravel:8000"
+    
+    tls {
+    }
+    
+    authorize {
+        uri = "${..connect_uri}/api/radius/auth"
+        method = "post"
+        body = "json"
+        data = '{"username":"%{User-Name}","password":"%{User-Password}","mac":"%{Calling-Station-Id}","ip":"%{Framed-IP-Address}"}'
+    }
+    
+    accounting {
+        uri = "${..connect_uri}/api/radius/accounting/start"
+        method = "post"
+        body = "json"
+        data = '{"username":"%{User-Name}","mac":"%{Calling-Station-Id}","ip":"%{Framed-IP-Address}","voucher_code":"%{User-Password}","session_id":"%{Acct-Session-Id}"}'
+    }
+    
+    pool {
+        start = 0
+        min = 4
+        max = 32
+        spare = 1
+        uses = 0
+        retry_delay = 30
+        lifetime = 0
+        idle_timeout = 60
     }
 }

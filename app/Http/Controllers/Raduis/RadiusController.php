@@ -19,14 +19,32 @@ class RadiusController extends Controller
 			'ip' => 'required|ip',
 		]);
 
-		// Vérifier voucher ou user
+		// Vérifier voucher (unused OU used avec session active)
 		$voucher = \App\Models\Voucher::with('plan')
 			->where('code', $request->password)
-			->where('status', 'unused')
+			->whereIn('status', ['unused', 'used'])
 			->first();
 
-		if (!$voucher) {
+		if (!$voucher || !$voucher->plan) {
 			return response()->json(['accept' => false], 401);
+		}
+
+		// Si voucher déjà utilisé, vérifier session active dans Redis
+		if ($voucher->status === 'used') {
+			$sessions = Redis::keys("session:*");
+			$hasActiveSession = false;
+
+			foreach ($sessions as $key) {
+				$sessionData = json_decode(Redis::get($key), true);
+				if ($sessionData && $sessionData['voucher_code'] === $voucher->code) {
+					$hasActiveSession = true;
+					break;
+				}
+			}
+
+			if (!$hasActiveSession) {
+				return response()->json(['accept' => false, 'message' => 'Voucher expiré'], 401);
+			}
 		}
 
 		return response()->json([
@@ -49,6 +67,19 @@ class RadiusController extends Controller
 
 		if (!$voucher || !$voucher->plan) {
 			return response()->json(['success' => false, 'message' => 'Voucher invalide'], 404);
+		}
+
+		// Vérifier si session existe déjà pour ce voucher
+		$existingSession = Session::where('voucher_id', $voucher->id)
+			->where('status', 'active')
+			->first();
+
+		if ($existingSession) {
+			return response()->json([
+				'success' => true,
+				'session_id' => $existingSession->id,
+				'message' => 'Session déjà active'
+			]);
 		}
 
 		$sessionId = (string) Str::uuid();

@@ -50,6 +50,9 @@ services:
     depends_on:
       - redis
       - postgres
+      - laravel
+    links:
+      - laravel:laravel
     restart: unless-stopped
     command: freeradius -f -l stdout
 

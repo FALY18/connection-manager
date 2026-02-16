@@ -51,7 +51,7 @@ class VoucherController extends Controller
         ]);
 
         // Chercher le voucher
-        $voucher = Voucher::where('code', $request->code)
+        $voucher = Voucher::with('plan')->where('code', $request->code)
             ->where('status', 'unused')
             ->first();
 
@@ -85,7 +85,6 @@ class VoucherController extends Controller
         $expiresAt = now()->addMinutes($plan->duration_minutes);
         $ttl = now()->diffInSeconds($expiresAt);
 
-        // Vérifier que le TTL est valide pour Redis
         if ($ttl <= 0) {
             return response()->json([
                 'success' => false,
@@ -93,7 +92,6 @@ class VoucherController extends Controller
             ], 400);
         }
 
-        // S'assurer que le TTL est un entier
         $ttl = (int) $ttl;
 
         // Préparer les données de session
@@ -131,6 +129,21 @@ class VoucherController extends Controller
             ], 500);
         }
 
+        // Créer session dans PostgreSQL
+        try {
+            \App\Models\Session::create([
+                'id' => $sessionId,
+                'voucher_id' => $voucher->id,
+                'username' => 'web-user',
+                'ip_address' => $request->ip_address,
+                'mac_address' => $request->device_mac,
+                'status' => 'active',
+                'started_at' => now(),
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Session DB creation error', ['error' => $e->getMessage()]);
+        }
+
         // Mettre à jour le voucher
         try {
             $voucher->update([
@@ -145,7 +158,6 @@ class VoucherController extends Controller
                 'voucher_id' => $voucher->id,
             ]);
             
-            // Optionnel: Supprimer la session Redis si l'update échoue
             Redis::del("session:{$sessionId}");
             
             return response()->json([

@@ -12,28 +12,36 @@ server default {
     }
     
     authorize {
+        filter_username
         preprocess
-        files
+        rest
+        
+        if (ok) {
+            update control {
+                Auth-Type := Accept
+            }
+            update reply {
+                Session-Timeout := 3600
+                Idle-Timeout := 300
+            }
+        }
     }
     
     authenticate {
-        pap
-    }
-    
-    accounting {
-        detail
-    }
-    
-    session {
-    }
-    
-    post-auth {
-        update reply {
-            &Acct-Interim-Interval = 300
-        }
     }
     
     preacct {
         preprocess
+        acct_unique
+    }
+    
+    accounting {
+        rest
+    }
+    
+    post-auth {
+        Post-Auth-Type REJECT {
+            attr_filter.access_reject
+        }
     }
 }

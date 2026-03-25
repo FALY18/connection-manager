@@ -1,6 +1,6 @@
-# 🔌 Connection Manager — Backend (`backend_manageCOnnexion`)
+# 🖥️ Connection Manager — Frontend (`suivie_connexion`)
 
-> API REST Laravel pour la gestion des connexions WiFi avec authentification RADIUS, vouchers, sessions temps réel et streaming SSE.
+> Interface utilisateur Next.js 16 pour la gestion et le suivi des connexions WiFi — dashboard admin, activation de vouchers, achat de plans et monitoring temps réel.
 
 ---
 
@@ -8,120 +8,156 @@
 
 - [Aperçu du projet](#aperçu-du-projet)
 - [Stack technique](#stack-technique)
-- [Architecture](#architecture)
+- [Architecture Clean Code](#architecture-clean-code)
 - [Prérequis](#prérequis)
 - [Installation & Démarrage](#installation--démarrage)
 - [Variables d'environnement](#variables-denvironnement)
 - [Structure du projet](#structure-du-projet)
-- [API Reference](#api-reference)
-- [Modèles de données](#modèles-de-données)
-- [Services & Fonctionnalités clés](#services--fonctionnalités-clés)
-- [Commandes Artisan personnalisées](#commandes-artisan-personnalisées)
-- [Infrastructure Docker](#infrastructure-docker)
-- [Tests](#tests)
+- [Pages & Fonctionnalités](#pages--fonctionnalités)
+- [State Management (Zustand)](#state-management-zustand)
+- [Composants UI](#composants-ui)
+- [Intégration Backend](#intégration-backend)
+- [Conventions & bonnes pratiques](#conventions--bonnes-pratiques)
 
 ---
 
 ## 🎯 Aperçu du projet
 
-**Connection Manager Backend** est une API REST construite avec **Laravel 12** qui orchestre :
+**Connection Manager Frontend** est une application **Next.js 16** (App Router) avec **React 19** qui propose :
 
-- L'**authentification RADIUS** via FreeRADIUS pour les connexions WiFi
-- La **gestion des vouchers** (génération, activation, expiration automatique)
-- Le **suivi des sessions WiFi** en temps réel
-- Un **dashboard admin** avec streaming SSE (Server-Sent Events)
-- La **gestion des plans tarifaires** (durée, quota data, débit)
+- Un **portail client** : activation de vouchers WiFi, achat de plans tarifaires, suivi de session
+- Un **dashboard admin** : monitoring des connexions actives en temps réel, actions sur les sessions (déconnecter, bloquer, limiter)
+- Une **authentification admin** sécurisée avec persistance de session
+- Une architecture **Clean Code** feature-driven avec TypeScript strict
 
 ---
 
 ## 🛠 Stack technique
 
-### Backend — Core
+### Framework & Langage
 | Technologie | Version | Rôle |
 |---|---|---|
-| **PHP** | ^8.2 | Langage principal |
-| **Laravel** | ^12.0 | Framework applicatif |
-| **Laravel Sanctum** | ^4.2 | Authentification API par tokens |
-| **Predis** | ^3.3 | Client Redis (Pub/Sub, cache sessions) |
+| **Next.js** | 16.1.4 | Framework React — App Router, SSR, API routes |
+| **React** | 19.2.3 | Bibliothèque UI |
+| **TypeScript** | ^5 | Typage statique strict |
 
-### Base de données & Cache
+### Styling
 | Technologie | Version | Rôle |
 |---|---|---|
-| **PostgreSQL** | 16 (Alpine) | Base de données principale |
-| **Redis** | Custom build | Cache sessions, expiration TTL, pub/sub |
+| **Tailwind CSS** | ^4.0 | Utility-first CSS |
+| **tw-animate-css** | ^1.4.0 | Animations Tailwind |
+| **class-variance-authority** | ^0.7.1 | Variants de composants |
+| **clsx + tailwind-merge** | latest | Fusion conditionnelle de classes |
 
-### Protocoles réseau
-| Technologie | Rôle |
-|---|---|
-| **FreeRADIUS** | Serveur AAA (Authentication, Authorization, Accounting) |
-| **RADIUS CoA** | Change of Authorization — modification dynamique des sessions actives |
-| **SSE** | Server-Sent Events pour le dashboard temps réel |
+### Composants UI
+| Technologie | Version | Rôle |
+|---|---|---|
+| **Radix UI** | ^1.x / ^2.x | Primitives accessibles (Dialog, Tabs, Label, Slot…) |
+| **shadcn/ui** (custom) | — | Système de composants basé sur Radix UI |
+| **Lucide React** | ^0.562.0 | Icônes SVG |
 
-### Infrastructure & DevOps
-| Technologie | Rôle |
-|---|---|
-| **Docker / Docker Compose** | Orchestration multi-services |
-| **Vite** | Build du frontend minimal (assets) |
-| **Tailwind CSS** | Styles (frontend blade minimal) |
+### State Management
+| Technologie | Version | Rôle |
+|---|---|---|
+| **Zustand** | ^5.0.10 | Store global léger avec devtools & persist |
 
-### Dev tools
-| Outil | Rôle |
-|---|---|
-| **PHPUnit** ^11.5 | Tests unitaires & fonctionnels |
-| **Laravel Pint** | Linting / formatage PHP |
-| **Laravel Sail** | Dev local via Docker |
-| **Faker** | Seeders de données de test |
+### Analytics & Build
+| Technologie | Version | Rôle |
+|---|---|---|
+| **@vercel/analytics** | ^1.6.1 | Analytics de performance (Vercel) |
+| **Bun** | latest | Package manager & runtime (fichier `bun.lock`) |
+| **ESLint** | ^9 | Linting avec eslint-config-next |
 
 ---
 
-## 🏗 Architecture
+## 🏗 Architecture Clean Code
+
+Le projet applique une architecture **feature-driven** avec une séparation claire des responsabilités.
+
+### Principe général
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Client (WiFi User)                    │
-└────────────────────────┬────────────────────────────────┘
-                         │ RADIUS Auth (UDP 1812/1813)
-                         ▼
-┌─────────────────────────────────────────────────────────┐
-│                    FreeRADIUS                            │
-│   ┌─────────────┐    REST API     ┌──────────────────┐  │
-│   │ radius-config│ ──────────────▶│  Laravel API     │  │
-│   │ clients.conf │                │  /radius/auth    │  │
-│   └─────────────┘                │  /radius/acctg   │  │
-└──────────────────────────────────┴──────────────────────┘
-                                            │
-                    ┌───────────────────────┼───────────────┐
-                    ▼                       ▼               ▼
-            ┌──────────────┐      ┌──────────────┐  ┌─────────────┐
-            │  PostgreSQL  │      │    Redis     │  │   Admin     │
-            │  Sessions    │      │  TTL expiry  │  │  Dashboard  │
-            │  Vouchers    │◀────▶│  Pub/Sub     │  │  SSE Stream │
-            │  Plans       │      │  Session keys│  └─────────────┘
-            └──────────────┘      └──────────────┘
-```
-
-### Flux de connexion WiFi
-
-```
-1. Client → FreeRADIUS (Access-Request, UDP 1812)
-2. FreeRADIUS → Laravel POST /api/radius/auth
-3. Laravel → vérifie voucher (PostgreSQL)
-4. Laravel → stocke session dans Redis (TTL = durée plan)
-5. FreeRADIUS → Access-Accept ou Access-Reject
-6. Client connecté → FreeRADIUS Accounting (UDP 1813)
-7. FreeRADIUS → Laravel POST /api/radius/accounting/start
-8. Redis TTL expire → redis-listener → session invalidée (CoA disconnect)
+src/
+├── app/                    # Routing Next.js (App Router)
+│   ├── admin/page.tsx      # Shell de la page admin
+│   ├── activate/page.tsx   # Shell de la page activation
+│   ├── buy/page.tsx        # Shell de la page achat
+│   ├── login/page.tsx      # Shell de la page login
+│   ├── user/session/       # Suivi de session utilisateur
+│   ├── layout.tsx          # Layout racine (ThemeProvider)
+│   └── globals.css         # Styles globaux
+│
+├── features/               # Fonctionnalités métier (feature slices)
+│   ├── admin/
+│   │   ├── page.tsx                        # Composant AdminDashboard
+│   │   ├── components/
+│   │   │   ├── ConnectionsTable.tsx        # Tableau des connexions actives
+│   │   │   ├── KpiCard.tsx                 # Cartes KPI (stats)
+│   │   │   └── ConnectionActions.tsx       # Actions sur une connexion
+│   │   ├── hooks/
+│   │   │   ├── useAdminAuth.ts             # Auth admin (Zustand)
+│   │   │   └── useConnections.ts           # État & actions sur les connexions
+│   │   ├── types/connection.ts             # Type Connection
+│   │   ├── constants/colors.ts             # Couleurs de statut
+│   │   ├── utils/statusHelpers.ts          # Helpers de statut
+│   │   └── data/mockConnections.ts         # Données mock (dev)
+│   │
+│   ├── activate/
+│   │   ├── page.tsx                        # Page activation voucher
+│   │   ├── components/ActivateForm.tsx     # Formulaire d'activation
+│   │   ├── hooks/useVoucherActivation.ts   # Logique d'activation
+│   │   ├── actions/voucher.actions.ts      # Actions réseau (pure I/O)
+│   │   ├── utils/device-info.ts            # Détection MAC/IP
+│   │   ├── types/voucher.ts                # Types voucher
+│   │   └── constants/messages.ts           # Messages UX
+│   │
+│   ├── login/
+│   │   ├── page.tsx                        # Page login admin
+│   │   ├── components/LoginForm.tsx        # Formulaire de connexion
+│   │   ├── hooks/useAdminLogin.ts          # Logique login
+│   │   ├── actions/action.ts               # Appel API login
+│   │   ├── utils/fetcher.ts                # Wrapper fetch
+│   │   ├── types/auth.ts                   # Types auth
+│   │   └── constants/messages.ts
+│   │
+│   ├── plans/
+│   │   ├── components/pricing-plans.tsx    # Affichage des plans
+│   │   ├── hooks/usePlans.ts               # Chargement des plans
+│   │   ├── actions/actions.ts              # API plans
+│   │   ├── lib/plan-mapper.ts              # Mapping API → UI
+│   │   └── types/plan.ts                  # Type Plan
+│   │
+│   └── vouchers/
+│       ├── components/VoucherManager.tsx   # Gestion vouchers admin
+│       ├── hooks/useVouchers.ts            # État des vouchers
+│       ├── actions/voucher_actions.ts      # API vouchers
+│       └── types/types.ts                 # Types vouchers
+│
+├── components/
+│   ├── theme-provider.tsx  # Fournisseur de thème (dark/light)
+│   └── ui/                 # 40+ composants shadcn/ui
+│
+├── lib/
+│   ├── api.ts              # Service API centralisé (types + fetcher)
+│   ├── store.ts            # Store Zustand global (auth + connexions + WS)
+│   └── utils.ts            # Utilitaires (cn, formatters…)
+│
+├── stores/
+│   └── admin-auth_store.ts # Store Zustand dédié à l'auth admin
+│
+├── constants/
+│   └── urls.ts             # BASE_URL et endpoints API
+│
+└── utils/
+    └── fetcher.ts          # Fetcher HTTP générique typé
 ```
 
 ---
 
 ## ✅ Prérequis
 
-- **Docker** >= 24.x
-- **Docker Compose** >= 2.x
-- **Git**
-
-> Pas besoin d'installer PHP, Composer, ou Node localement — tout tourne en conteneurs.
+- **Node.js** >= 20.x (ou **Bun** >= 1.x recommandé)
+- L'API backend (`backend_manageCOnnexion`) doit être démarrée sur `http://localhost:8000`
 
 ---
 
@@ -132,46 +168,47 @@
 ```bash
 git clone https://github.com/FALY18/connection-manager.git
 cd connection-manager
-git checkout backend_manageCOnnexion
+git checkout suivie_connexion
 ```
 
-### 2. Configurer l'environnement
+### 2. Installer les dépendances
 
+Avec **Bun** (recommandé) :
 ```bash
-cp .env.example .env
+bun install
 ```
 
-Modifier les valeurs sensibles dans `.env` (voir section [Variables d'environnement](#variables-denvironnement)).
-
-### 3. Lancer l'infrastructure complète
-
+Avec **npm** :
 ```bash
-docker compose up -d
+npm install
 ```
 
-Docker va automatiquement :
-- Démarrer PostgreSQL, Redis, FreeRADIUS
-- Lancer Laravel (`php artisan serve`)
-- Jouer les migrations (`php artisan migrate`)
-- Seeder la base de données (`php artisan db:seed`)
-- Démarrer le listener Redis en arrière-plan
-
-### 4. Vérifier que tout tourne
+### 3. Configurer l'environnement
 
 ```bash
-docker compose ps
-# Tous les services doivent être "healthy" ou "running"
-
-curl http://localhost:8000/api/admin/me
-# → 401 Unauthenticated (c'est normal, non authentifié)
+cp .env.local.example .env.local
+# Modifier NEXT_PUBLIC_API_URL selon votre backend
 ```
 
-### 5. Se connecter en admin
+### 4. Démarrer en développement
 
 ```bash
-curl -X POST http://localhost:8000/api/admin/login \
-  -H "Content-Type: application/json" \
-  -d '{"email": "admin@example.com", "password": "password"}'
+# Avec Bun
+bun dev
+
+# Avec npm
+npm run dev
+```
+
+L'application sera disponible sur **http://localhost:3000**.
+
+### 5. Build de production
+
+```bash
+bun run build
+bun start
+# ou
+npm run build && npm start
 ```
 
 ---
@@ -179,371 +216,235 @@ curl -X POST http://localhost:8000/api/admin/login \
 ## ⚙️ Variables d'environnement
 
 ```env
-# Application
-APP_NAME="Connection Manager"
-APP_ENV=local
-APP_DEBUG=true
-APP_URL=http://localhost:8000
+# URL de base de l'API backend Laravel
+NEXT_PUBLIC_API_URL=http://localhost:8000/api
 
-# Base de données PostgreSQL
-DB_CONNECTION=pgsql
-DB_HOST=postgres
-DB_PORT=5432
-DB_DATABASE=gestion_connect
-DB_USERNAME=laravel_user
-DB_PASSWORD=secret
-
-# Redis
-REDIS_HOST=redis
-REDIS_PORT=6379
-REDIS_PREFIX=laravel-database-
-
-# RADIUS
-RADIUS_API_KEY=supersecretkey    # Clé partagée entre FreeRADIUS et Laravel
-
-# Cache & Sessions
-CACHE_DRIVER=redis
-SESSION_DRIVER=redis
-QUEUE_CONNECTION=redis
+# Analytics Vercel (optionnel)
+NEXT_PUBLIC_VERCEL_ANALYTICS=true
 ```
 
 ---
 
-## 📁 Structure du projet
+## 📱 Pages & Fonctionnalités
 
-```
-connection-manager/
-├── app/
-│   ├── Console/Commands/
-│   │   ├── CleanExpiredVouchers.php       # Nettoyage des vouchers expirés
-│   │   ├── CleanupExpiredSessions.php     # Purge des sessions expirées
-│   │   ├── RedisExpiryListener.php        # Écoute les événements TTL Redis
-│   │   └── SeedSessionsRedis.php          # Seeder de sessions test dans Redis
-│   ├── Http/
-│   │   ├── Controllers/
-│   │   │   ├── Admin/
-│   │   │   │   ├── Auth/
-│   │   │   │   │   ├── AuthController.php      # Login / Logout admin
-│   │   │   │   │   ├── RealtimeController.php  # Streaming SSE
-│   │   │   │   │   └── VoucherController.php   # CRUD vouchers
-│   │   │   │   ├── PlanController.php          # CRUD plans tarifaires
-│   │   │   │   └── SessionController.php       # Liste et déconnexion sessions
-│   │   │   ├── Client/
-│   │   │   │   └── SessionController.php       # Validation session client
-│   │   │   └── Raduis/
-│   │   │       └── RadiusController.php        # Endpoints FreeRADIUS
-│   │   └── Middleware/
-│   │       ├── AdminOnly.php               # Restreint aux admins
-│   │       ├── RadiusAuth.php              # Vérifie la clé API RADIUS
-│   │       └── VerifyCsrfToken.php
-│   ├── Models/
-│   │   ├── Customer.php    # Clients WiFi
-│   │   ├── Plan.php        # Plans (durée, quota, vitesse)
-│   │   ├── Session.php     # Sessions WiFi actives
-│   │   ├── User.php        # Administrateurs
-│   │   └── Voucher.php     # Codes d'accès temporaires
-│   ├── Providers/
-│   │   ├── SessionService.php   # Service de gestion des sessions
-│   │   └── VoucherService.php   # Service de gestion des vouchers
-│   └── Services/
-│       └── RadiusCoAService.php # Change of Authorization RADIUS
-├── database/
-│   ├── migrations/
-│   │   ├── create_customers_table.php
-│   │   ├── create_plans_table.php
-│   │   ├── create_vouchers_table.php
-│   │   └── create_wifi_sessions_table.php
-│   └── seeders/
-│       ├── AdminUserSeeder.php
-│       ├── PlanSeeder.php
-│       └── VoucherSeeder.php
-├── routes/
-│   └── api.php             # Toutes les routes API
-├── radius-config/           # Configuration FreeRADIUS (certifs, mods, sites)
-├── redis-config/            # Dockerfile Redis + redis.conf custom
-├── postgres-init/           # Script SQL d'initialisation PostgreSQL
-├── scripts/                 # Scripts utilitaires (setup, tests Redis)
-├── docker-compose.yml
-└── Dockerfile.laravel
-```
+### `/login` — Authentification Admin
+- Formulaire email / mot de passe
+- Appel `POST /api/admin/login`
+- Stockage du token Sanctum via le store Zustand (`admin-auth_store`)
+- Persistance de session dans `localStorage` (`AdminSession`)
+- Redirection automatique si déjà connecté
+
+### `/admin` — Dashboard Admin
+**Section Monitoring des connexions** :
+- Tableau de toutes les connexions WiFi actives
+- Données affichées : IP, MAC, temps restant, data utilisée / limite, statut (actif / bloqué)
+- KPI cards : nombre de connexions actives, data totale consommée, quota moyen
+- Simulation temps réel : progression des données toutes les 5 secondes
+- Actions sur chaque connexion :
+  - ❌ **Déconnecter** l'utilisateur
+  - 🚫 **Bloquer / Débloquer** la connexion
+  - 📉 **Réduire le quota data** de 50%
+  - ⏱ **Réduire le temps restant** de 50%
+
+**Section Vouchers** (VoucherManager) :
+- Génération de nouveaux vouchers
+- Suivi des vouchers actifs / expirés
+
+### `/activate` — Portail Client : Activation Voucher
+- Saisie du code voucher
+- Détection automatique de l'adresse MAC (`device-info.ts`)
+- Appel `POST /api/vouchers/activate`
+- Retour d'état : succès avec durée restante, ou erreur descriptive
+
+### `/buy` — Portail Client : Achat de Plans
+- Affichage des plans tarifaires disponibles (fetch `GET /api/admin/plans`)
+- Mapping API → UI via `plan-mapper.ts`
+- Sélection et redirection vers l'activation
+
+### `/user/session` — Suivi de Session Utilisateur
+- Affichage de la session WiFi active de l'utilisateur
+- Données consommées, temps restant
 
 ---
 
-## 📡 API Reference
+## 🧩 State Management (Zustand)
 
-### Authentification Admin
+Le projet utilise **deux stores Zustand** distincts :
 
-| Méthode | Endpoint | Auth | Description |
-|---|---|---|---|
-| `POST` | `/api/admin/login` | ❌ | Connexion admin, retourne un token Sanctum |
-| `GET` | `/api/admin/me` | ✅ Sanctum | Profil de l'admin connecté |
-| `POST` | `/api/admin/logout` | ✅ Sanctum | Révocation du token |
+### `useAppStore` (`src/lib/store.ts`)
+Store global avec **devtools** + **persist** (sauvegarde partielle en `localStorage`) :
 
-**Exemple — Login admin :**
-```json
-POST /api/admin/login
-{
-  "email": "admin@example.com",
-  "password": "password"
-}
+```typescript
+interface AppState {
+  // Auth
+  user: User | null
+  isAuthenticated: boolean
+  token: string | null
 
-// Réponse
-{
-  "token": "1|abc123...",
-  "user": { "id": 1, "name": "Admin", "email": "admin@example.com" }
+  // Connexions
+  connections: Connection[]
+  connectionStats: { active, total, dataUsed, averageUsage }
+
+  // UI
+  isLoading: boolean
+  error: string | null
+  lastUpdated: number
+
+  // WebSocket
+  isConnected: boolean
+  reconnectAttempts: number
+
+  // Actions
+  setUser, setToken, setConnections, updateConnection,
+  removeConnection, setLoading, setError, setWebSocketStatus,
+  incrementReconnectAttempts, resetReconnectAttempts,
+  logout, reset
 }
 ```
 
+**Sélecteurs optimisés** (évitent les re-renders inutiles) :
+```typescript
+import { useAuth, useConnections, useUI, useWebSocket } from '@/lib/store'
+```
+
+### `useAdminAuthStore` (`src/stores/admin-auth_store.ts`)
+Store léger dédié à l'authentification admin avec persistance via `localStorage` :
+
+```typescript
+// Utilisation dans un composant
+const { user, token, setSession, logout } = useAdminAuthStore()
+```
+
 ---
 
-### Sessions WiFi
+## 🎨 Composants UI
 
-| Méthode | Endpoint | Auth | Description |
-|---|---|---|---|
-| `GET` | `/api/admin/sessions` | ✅ Sanctum | Liste toutes les sessions actives |
-| `DELETE` | `/api/admin/sessions/{id}` | ✅ Sanctum | Déconnecte une session (envoi CoA) |
-| `GET` | `/api/radius/session/{sessionId}` | ✅ API Key | Valide une session (pour RADIUS) |
+### Bibliothèque shadcn/ui (40+ composants)
+
+Le dossier `src/components/ui/` contient une version custom de shadcn/ui, incluant notamment :
+
+| Composant | Usage |
+|---|---|
+| `Button`, `Input`, `Label`, `Form` | Formulaires |
+| `Card`, `Badge`, `Alert` | Affichage d'informations |
+| `Dialog`, `Sheet`, `Drawer` | Modales et panneaux |
+| `Table`, `Pagination` | Tableaux de données |
+| `Tabs`, `Accordion` | Navigation interne |
+| `Chart` | Graphiques (basé sur Recharts) |
+| `Skeleton` | Loading states |
+| `Sidebar`, `Navigation Menu` | Layout principal |
+| `Toast` (via `Sonner`) | Notifications |
+
+### Thème
+- Support **dark / light mode** via `ThemeProvider` (next-themes)
+- Variables CSS Tailwind v4 pour les couleurs sémantiques
 
 ---
 
-### Plans Tarifaires
+## 🔌 Intégration Backend
 
-| Méthode | Endpoint | Auth | Description |
-|---|---|---|---|
-| `GET` | `/api/admin/plans` | ✅ Sanctum | Liste tous les plans |
-| `POST` | `/api/admin/plans` | ✅ Sanctum | Créer un plan |
-| `GET` | `/api/admin/plans/{plan}` | ✅ Sanctum | Détail d'un plan |
-| `PUT` | `/api/admin/plans/{plan}` | ✅ Sanctum | Modifier un plan |
-| `DELETE` | `/api/admin/plans/{plan}` | ✅ Sanctum | Supprimer un plan |
-| `PATCH` | `/api/admin/plans/{plan}/toggle` | ✅ Sanctum | Activer / désactiver |
+### Fetcher générique
 
-**Exemple — Créer un plan :**
-```json
-POST /api/admin/plans
-{
-  "name": "Plan 1h",
-  "duration_minutes": 60,
-  "data_limit_mb": 500,
-  "speed_limit_kbps": 2048,
-  "price": 1000,
-  "is_active": true
+```typescript
+// src/utils/fetcher.ts
+export async function fetcher<T>(url: string, options?: RequestInit): Promise<T> {
+  const response = await fetch(url, options)
+  if (!response.ok) throw new Error(`HTTP ${response.status}`)
+  return response.json()
 }
 ```
 
----
+### Actions (Server Actions / Client actions)
 
-### Vouchers
+Chaque feature expose des fonctions d'action **pures** (sans état, sans dépendance UI) dans son dossier `actions/` :
 
-| Méthode | Endpoint | Auth | Description |
-|---|---|---|---|
-| `GET` | `/api/vouchers` | ❌ | Liste des vouchers disponibles |
-| `POST` | `/api/vouchers/generate` | ❌ | Générer un nouveau voucher |
-| `POST` | `/api/vouchers/activate` | ❌ | Activer un voucher (connexion WiFi) |
-| `GET` | `/api/users/{user}/vouchers` | ❌ | Vouchers d'un utilisateur |
-
-**Exemple — Activer un voucher :**
-```json
-POST /api/vouchers/activate
-{
-  "code": "ABC123",
-  "device_mac": "AA:BB:CC:DD:EE:FF",
-  "ip_address": "192.168.1.100"
+```typescript
+// src/features/activate/actions/voucher.actions.ts
+export const activateVoucher = async (
+  code: string,
+  deviceMac?: string,
+  ipAddress?: string
+): Promise<ActivateVoucherResponse> => {
+  return fetcher<ActivateVoucherResponse>(`${base_url}/vouchers/activate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, device_mac: deviceMac, ip_address: ipAddress })
+  })
 }
 ```
 
----
+### Hooks personnalisés
 
-### Endpoints RADIUS (FreeRADIUS → Laravel)
+Chaque feature encapsule sa logique dans des hooks dédiés :
 
-> Ces endpoints sont appelés par FreeRADIUS via le module `rest`. Sécurisés par clé API (`RADIUS_API_KEY`).
-
-| Méthode | Endpoint | Description |
-|---|---|---|
-| `POST` | `/api/radius/auth` | Authentification d'un client WiFi |
-| `POST` | `/api/radius/accounting/start` | Début de session |
-| `POST` | `/api/radius/accounting/stop` | Fin de session |
-| `POST` | `/api/radius/accounting/interim` | Mise à jour interim (data usage) |
-
----
-
-### Dashboard Temps Réel (SSE)
-
-| Méthode | Endpoint | Auth | Description |
-|---|---|---|---|
-| `GET` | `/api/stream/sessions` | ✅ Sanctum | Stream SSE — sessions en direct |
-
-```javascript
-// Connexion côté frontend
-const evtSource = new EventSource('/api/stream/sessions', {
-  headers: { Authorization: `Bearer ${token}` }
-});
-evtSource.onmessage = (e) => console.log(JSON.parse(e.data));
+```typescript
+// src/features/activate/hooks/useVoucherActivation.ts
+const { activate, isLoading, error, result } = useVoucherActivation()
 ```
 
 ---
 
-## 🗄 Modèles de données
+## 📐 Conventions & Bonnes pratiques
 
-### `Plans`
-```
-id, name, duration_minutes, data_limit_mb,
-speed_limit_kbps (download/upload), price, is_active,
-created_at, updated_at
-```
+### Organisation des imports
+```typescript
+// ✅ Bon — imports centralisés depuis l'index de la feature
+import { useAdminAuth } from '@/features/admin/hooks/useAdminAuth'
+import { Connection } from '@/features/admin/types/connection'
 
-### `Vouchers`
-```
-id, code (unique), plan_id, customer_id,
-status (unused|active|expired|depleted),
-activated_at, expires_at, data_used_mb,
-device_mac, ip_address, created_at, updated_at
+// ✅ Bon — alias @/ configuré dans tsconfig.json
+import { fetcher } from '@/utils/fetcher'
+import { BASE_URL } from '@/constants/urls'
 ```
 
-### `WiFi Sessions`
+### Séparation des responsabilités
 ```
-id, voucher_id, customer_id, session_id (RADIUS),
-nas_ip, nas_port, calling_station_id (MAC),
-framed_ip, start_time, stop_time,
-input_octets, output_octets, terminate_cause,
-created_at, updated_at
+components/   →  UI pure (aucune logique métier)
+hooks/        →  Logique réutilisable + état local
+actions/      →  I/O réseau pure (aucun state, aucune UI)
+types/        →  Interfaces TypeScript
+constants/    →  Données statiques (messages, couleurs, URLs)
+utils/        →  Fonctions pures (formatters, helpers)
+stores/       →  État global Zustand
 ```
 
-### `Customers`
-```
-id, name, email, phone, mac_address,
-created_at, updated_at
-```
+### Composants "use client"
+
+Les hooks de state (`useState`, `useEffect`, Zustand) imposent `"use client"` en tête des fichiers concernés. Les composants Server Component (sans state) ne doivent pas avoir cette directive.
+
+### TypeScript strict
+
+Le projet est configuré avec TypeScript strict. Éviter `any` — utiliser des types génériques ou des types d'union précis.
 
 ---
 
-## ⚡ Services & Fonctionnalités clés
+## 🚀 Performance
 
-### VoucherService
-
-Gère le cycle de vie complet des vouchers :
-- Génération de codes uniques
-- Activation avec attribution d'un plan
-- Calcul d'expiration (`activated_at + duration_minutes`)
-- Mise à jour des quotas data consommés
-
-### SessionService
-
-- Création/fermeture de sessions en base PostgreSQL
-- Synchronisation avec les clés Redis (`session:{id}`)
-- Récupération des sessions actives pour le dashboard
-
-### RadiusCoAService
-
-Envoie des paquets **CoA (Change of Authorization)** au NAS (Network Access Server) pour :
-- Déconnecter un utilisateur (`Disconnect-Request`)
-- Modifier les paramètres de session (débit, quota)
-
-### Redis TTL Listener (`RedisExpiryListener`)
-
-Commande Artisan qui écoute le canal `__keyevent@0__:expired` de Redis. Quand un voucher expire (TTL = 0), elle :
-1. Récupère la session associée
-2. Envoie un CoA Disconnect au NAS
-3. Met à jour le statut en base
+- **Zustand selectors** : chaque consommateur du store ne s'abonne qu'aux slices qu'il utilise, minimisant les re-renders
+- **Tree shaking** : exports centralisés per-feature pour un bundle optimisé
+- **Next.js App Router** : Server Components par défaut, Client Components uniquement quand nécessaire
+- **Tailwind CSS v4** : génération CSS à la compilation (zero-runtime)
 
 ---
 
-## 🛠 Commandes Artisan personnalisées
+## 🔧 Linting & Qualité
 
 ```bash
-# Écouter les expirations Redis (lancé automatiquement par docker-compose)
-php artisan redis:listen-expired
-
-# Nettoyer les vouchers expirés en base
-php artisan vouchers:clean-expired
-
-# Purger les sessions expirées
-php artisan sessions:cleanup-expired
-
-# Seeder des sessions de test dans Redis (développement)
-php artisan sessions:seed-redis
+# Linter ESLint
+bun lint
+# ou
+npm run lint
 ```
 
----
-
-## 🐳 Infrastructure Docker
-
-### Services
-
-| Service | Image | Port exposé | Rôle |
-|---|---|---|---|
-| `postgres` | postgres:16-alpine | `5433:5432` | Base de données |
-| `redis` | custom build | `6380:6379` | Cache & pub/sub |
-| `freeradius` | freeradius/freeradius-server | `1812-1813/udp` | Serveur AAA |
-| `laravel` | custom (Dockerfile.laravel) | `8000:8000` | API REST |
-| `redis-listener` | custom (Dockerfile.laravel) | — | Worker expiration |
-
-### Lancer en développement
-
-```bash
-# Démarrer tous les services
-docker compose up -d
-
-# Voir les logs Laravel
-docker compose logs -f laravel
-
-# Voir les logs RADIUS
-docker compose logs -f freeradius
-
-# Accéder au shell Laravel
-docker compose exec laravel bash
-
-# Accéder à psql
-docker compose exec postgres psql -U laravel_user -d gestion_connect
-
-# Accéder à redis-cli
-docker compose exec redis redis-cli
-```
-
-### Arrêter et nettoyer
-
-```bash
-# Arrêter les conteneurs
-docker compose down
-
-# Arrêter + supprimer les volumes (repart de zéro)
-docker compose down -v
-```
-
----
-
-## 🧪 Tests
-
-```bash
-# Lancer tous les tests
-docker compose exec laravel php artisan test
-
-# Avec couverture de code
-docker compose exec laravel php artisan test --coverage
-
-# Tests unitaires seulement
-docker compose exec laravel php artisan test --testsuite=Unit
-
-# Tests fonctionnels seulement
-docker compose exec laravel php artisan test --testsuite=Feature
-```
-
----
-
-## 🔒 Sécurité
-
-- **Authentification Admin** : Laravel Sanctum (tokens Bearer, révocables)
-- **Endpoints RADIUS** : Middleware `RadiusAuth` — vérifie le header `X-Radius-Key` contre `RADIUS_API_KEY`
-- **CORS** : Configuré via `config/cors.php`
-- **HTTPS** : Recommandé en production (proxy Nginx/Traefik devant Laravel)
+Configuration ESLint : `eslint.config.mjs` avec `eslint-config-next` (inclut les règles React, Next.js, accessibilité).
 
 ---
 
 ## 📌 Notes de développement
 
-- Le port PostgreSQL est exposé sur **5433** (et non 5432) pour éviter les conflits avec une instance locale.
-- Le port Redis est exposé sur **6380** pour la même raison.
-- FreeRADIUS communique avec Laravel via le hostname Docker `laravel` (résolution interne au réseau `app-network`).
-- Les notifications d'expiration Redis nécessitent l'activation du keyspace notifications (`notify-keyspace-events KEA`), configuré dans `redis-config/redis.conf`.
+- Les données du dashboard admin utilisent actuellement des **données mock** (`mockConnections.ts`) — à connecter au stream SSE `/api/stream/sessions` du backend.
+- Le store `useAppStore` prévoit une intégration **WebSocket** (`isConnected`, `reconnectAttempts`) — à brancher sur le backend SSE.
+- Le `bun.lock` indique que **Bun** est le package manager de référence pour ce projet.
 
 ---
 
